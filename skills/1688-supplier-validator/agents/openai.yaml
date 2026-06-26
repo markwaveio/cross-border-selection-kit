@@ -1,0 +1,4 @@
+interface:
+  display_name: "1688 Supplier Validator"
+  short_description: "Check 1688 supply-chain depth, price, and MOQ for a product."
+  default_prompt: "Validate this product's supply chain on 1688 and summarize price range, MOQ, and supplier count."

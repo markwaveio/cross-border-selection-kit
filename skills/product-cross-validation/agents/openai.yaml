@@ -1,0 +1,6 @@
+interface:
+  display_name: "Product Cross Validation"
+  short_description: "Validate products across ads and suppliers"
+  default_prompt: "Use $product-cross-validation to validate these product ideas across ads, trends, suppliers, logistics, and differentiation."
+policy:
+  allow_implicit_invocation: true

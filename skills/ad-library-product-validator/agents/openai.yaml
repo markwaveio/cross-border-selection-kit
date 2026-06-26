@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ad Library Product Validator"
+  short_description: "Validate product demand with Meta Ad Library ads."
+  default_prompt: "Validate this product keyword with Meta Ad Library and generate an analysis report."

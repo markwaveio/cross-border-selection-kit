@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google Trends Product Validator"
+  short_description: "Check 5-year search interest and breakout terms for a product."
+  default_prompt: "Validate this product's search demand on Google Trends and report breakout-term signals."

@@ -1,0 +1,16 @@
+# 用户自己的真实配置(只提交 .example 模板,绝不提交填好的真实值)
+config/pipeline.config
+
+# 选品产出 / 本地发布仓(各自机器上生成,不进分发仓)
+workspace/
+pages/
+*.local
+
+# 依赖与缓存
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+
+# 运行日志
+*.log

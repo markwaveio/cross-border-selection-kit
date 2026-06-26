@@ -1,0 +1,57 @@
+# ============================================================
+# 跨境选品自动化 · 配置文件模板
+# ============================================================
+# 用法:复制本文件为 pipeline.config(去掉 .example),填入你自己的值。
+#   cp pipeline.config.example pipeline.config
+# 所有脚本和 installer 都从 pipeline.config 读取这些值。
+# 改一处,全链路生效。# 开头的行是注释,= 两边不要留空格。
+# ============================================================
+
+# ── 1. 安装路径 ──────────────────────────────────────────────
+# skills 安装到哪里(取决于你的平台,installer 会帮你确认):
+#   Claude Code:  ~/.claude/skills
+#   Codex:        ~/.codex/skills
+#   OpenCLAW:     ~/.openclaw/skills
+SKILLS_DIR=~/.claude/skills
+
+# 选品产出(原始数据/单品报告/看板/INDEX)存档根目录:
+WORKSPACE_DIR=~/cross-border-selection/workspace
+
+# 本地发布仓(git 仓,push 到下面的 GitHub 仓库):
+PUBLISH_DIR=~/cross-border-selection/pages
+
+# ── 2. GitHub 发布(可选,不发布可留空) ──────────────────────
+# 你自己的 GitHub 用户名(不是 markwaveio,填你的):
+GITHUB_OWNER=your-github-username
+
+# 发布仓名(installer 会用 gh 自动创建):
+GITHUB_REPO=cross-border-selection-reports
+
+# 仓库可见性:public(公开,会被搜索引擎索引)| private(私有)
+# ⚠️ 选 public = 你的选品数据公开。不确定就填 private。
+GITHUB_VISIBILITY=private
+
+# ── 3. 目标市场 ──────────────────────────────────────────────
+# 验证哪个市场(Ad Library / Trends 的地区):US / UK / DE / JP ...
+TARGET_MARKET=US
+
+# ── 4. 定时自动运行(可选) ──────────────────────────────────
+# 是否启用定时:true / false
+SCHEDULE_ENABLED=false
+
+# 多久跑一轮(cron 表达式,默认每周一早 9 点):
+SCHEDULE_CRON=0 9 * * 1
+
+# 定时机制(installer 按你的平台自动选,一般不用手填):
+#   claude-schedule | system-cron | launchd
+SCHEDULE_MECHANISM=claude-schedule
+
+# ── 5. 运行参数(一般用默认即可) ────────────────────────────
+# Ad Library 每个品抓多少条广告:
+AD_LIBRARY_MAX_ADS=40
+
+# normalize 后取前几个候选品进入验证:
+SIGNAL_TOP_N=8
+
+# 污染自检相关性阈值(低于此判污染,触发自动收窄,0-1):
+POLLUTION_THRESHOLD=0.6
