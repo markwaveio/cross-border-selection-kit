@@ -55,12 +55,19 @@ https://trends.google.com/trends/explore?date=today%205-y&geo=US&q=<term1>,<term
 
 ## Rate-Limit Handling
 
+> ⛔ **429 是临时限流,不是失败。绝不能因为遇到 429 就放弃这一步、把 Trends 数据标成拿不到。** 429 的正确处理是**退避后重试**——用 `ScheduleWakeup` 错开等待窗口再回来重抓,至少重试到拿到数据或确认是真空结果为止。**直接放弃 = 处理错误。** 上一轮就出现过"Trends 429 后直接放弃、没退避重试"的错误,务必避免。
+>
+> 唯一例外:连续退避重试 **3 次以上**仍持续 429(说明会话被深度风控),才停下来如实告诉用户"Trends 当前持续限流,建议稍后单独重跑这一步",并在报告里把该品的 Trends 维度标 `manual_confirmation_needed`(而不是悄悄当无数据)。
+
 Google Trends aggressively rate-limits (HTTP 429) under rapid repeated requests, and fires a `captcha-ready` Google Analytics beacon as an early warning sign right before/after a 429 — if you see this beacon in `list_network_requests`, treat the session as already under suspicion.
 
-- **Do not retry immediately.** A short backoff (under ~15s) can make things worse — observed behavior: after one premature retry, three separate widgets failed with "Oops! Something went wrong" instead of just the original one.
-- **Use `ScheduleWakeup`, not `sleep`**, to wait out the rate-limit window. Pass a fully self-contained prompt describing the retry (reload the page, re-check the specific widget request, save on success, back off further on repeat failure).
-- Start with ~150s backoff; lengthen on repeated 429s rather than retrying at a fixed interval.
-- Distinguish a 429 (UI shows "Oops! Something went wrong. Please try again in a bit.") from a genuine empty result (UI shows "Hmm, your search doesn't have enough data to show here.") — these look similar at a glance but mean opposite things for whether to retry.
+**退避重试的具体做法**:
+- **不要立刻重试。** 短间隔重试(<~15s)会越限越狠——实测一次过早重试后,三个 widget 同时报 "Oops! Something went wrong"。
+- **用 `ScheduleWakeup`,不要用 `sleep`** 来等限流窗口过去。传一个自包含的 prompt 描述重试动作(重载页面、重查目标 widget 请求、成功就保存、再遇 429 就加长退避)。
+- **从 ~150 秒退避起步**,连续 429 就**逐次加长**(150s→300s→…),而不是固定间隔硬刷。
+- **区分 429 和真空结果**:429 的 UI 是 "Oops! Something went wrong. Please try again in a bit."(要退避重试);真空结果是 "Hmm, your search doesn't have enough data to show here."(直接采纳,不重试)。两者长得像但处理相反。
+
+> 给执行者的提醒:`ScheduleWakeup` 退避会让本轮链路在这一步**等待并稍后自动续跑**,这是正常的、设计内的——不是卡死。如果当前模型/环境不支持 ScheduleWakeup 这类定时唤醒,就退而求其次:明确告诉用户"需要等约 N 分钟避开 Trends 限流",并把这一步挂起,等用户回来或稍后手动续跑,**仍然不要直接放弃**。
 
 ## Output Locations
 

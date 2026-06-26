@@ -65,7 +65,7 @@ Amazon 经常 503/验证码/反爬,**全新环境命中率更高**。抓不到�
 **怎么做**:用 `google-trends-product-validator` skill。**必须用 chrome-devtools MCP 拦截 Trends widget API**(token 要浏览器现场拿,裸 curl 不行)。关键词用第 2 步对齐后的词,地区 `$TARGET_MARKET`。
 
 **自带纪律(skill 已内置)**:
-- **429 限流 ≠ 空结果**:限流 UI 显示 "Oops! Something went wrong"(要退避重试,从~150秒起步,别短间隔硬刷);真空结果显示 "doesn't have enough data"(直接采纳)。
+- **⛔ 429 限流必须退避重试,不许放弃**:429 是临时限流不是失败。用 `ScheduleWakeup` 从~150秒退避后重抓,连续 429 就加长退避(150→300→…),**直接放弃/标成拿不到数据 = 错误**。连续退避 3 次以上仍持续限流,才停下提示用户稍后单独重跑并标 `manual_confirmation_needed`。429(UI "Oops! Something went wrong")要重试,真空结果(UI "doesn't have enough data")才直接采纳。
 - **语义歧义自检**:看 related searches top 第 1 名,若是跨品类词(如 oil sprayer→paint sprayer)即判主词歧义,自动收窄重抓。
 
 **产出**:
@@ -80,7 +80,7 @@ Amazon 经常 503/验证码/反爬,**全新环境命中率更高**。抓不到�
 
 **怎么做**:用 `1688-supplier-validator` skill。关键词用对应**中文词**。
 - **中文关键词必须 GBK 编码**(脚本已处理好,别绕过 `gbkPercentEncode`)。
-- **搜索页不需要登录**,别被 `login_required` 误判吓到。若一定要登录又被风控,换已有正常历史的浏览器会话(chrome-devtools MCP),别死磕新 profile 扫码。
+- **⛔ 被验证码/风控拦截时,绝不直接判失败**,按升级阶梯兜底:① 换 chrome-devtools MCP 浏览器会话(已有正常历史)重抓 → ② 仍被拦就**主动引导用户在浏览器里扫码登录** 1688/淘宝账号,登录后该会话变可信再重试 → ③ 都不行(用户无账号/登录仍被风控)才标 `manual_confirmation_needed` + 附搜索直达链接。**别停在"换会话"就放弃,也别因"搜索页理论上不需要登录"就跳过引导扫码。**
 
 **产出**:`$WORKSPACE_DIR/原始数据/1688/<品类slug>.json`
 
