@@ -50,7 +50,7 @@ description: 引导用户安装部署跨境选品自动化套件。当用户说"
    - 不发布 → `GITHUB_OWNER` 留空,`SCHEDULE_*` 之外其余用默认。
    - 发布 → 问 GitHub 用户名(`GITHUB_OWNER`)、仓名(默认 `cross-border-selection-reports`)、**可见性**。
      - ⚠️ **必须明确提示**:`public` = 选品数据公开、会被搜索引擎索引;不确定就选 `private`。默认给 `private`。
-4. **是否定时自动运行**(见第 5 步,先问 true/false 和频率)
+4. **是否定时自动运行**:这里只问"要不要定时"(true/false)。**如果要,具体几点跑放到第 5 步专门问清**——这一步先不要替用户填 `SCHEDULE_CRON`,`SCHEDULE_ENABLED` 先按用户意愿填 true/false 即可。
 
 收集完,把 `$KIT/config/pipeline.config.example` 复制为 `$KIT/config/pipeline.config`,用用户的值替换。**用 Write/Edit 工具写,逐项填**,写完读回来给用户确认一遍。
 
@@ -64,12 +64,19 @@ description: 引导用户安装部署跨境选品自动化套件。当用户说"
 
 ## 第 5 步:配置定时自动运行(可选)
 
-如果用户第 3 步选了定时,按平台生成定时配置:
+**仅当用户在第 3 步明确选了"要定时"才做这步。** 如果用户没要定时,直接跳过,**不要擅自建任何定时任务**。
 
-- **Claude Code**:用 `/schedule` 创建一个 routine,在 `SCHEDULE_CRON` 的时间跑"一轮跨境选品"。这是云端定时,机器关机也能跑。
-- **Codex / OpenCLAW / 通用**:写一个系统 cron(`crontab -e` 加一行)或 macOS launchd plist,定时调一个启动脚本(该脚本 `cd $KIT && source scripts/load_config.sh` 后触发链路)。模板见 `references/schedule-templates.md`。
+如果用户要定时,**必须先问清两件事,拿到答复后才能动手——不许用默认值替用户决定**:
 
-问清用户**希望什么时候跑**(默认每周一早 9 点 `0 9 * * 1`),写进 config 的 `SCHEDULE_CRON`,再据此生成对应平台的定时任务。
+1. **几点跑?**(频率 + 具体时间)。给参考(每周一早 9 点 / 每天早 8 点 / 每月 1 号),但**等用户回答**,把用户给的时间换算成 cron 表达式写进 config 的 `SCHEDULE_CRON`。
+   > ⚠️ 常见错误:直接套默认 `0 9 * * 1` 就把定时建好了,从没问用户。**这是不对的**——定时几点跑是用户的决定,必须问。
+2. **定时跑到外发步(GitHub 发布)怎么办?** 如果用户配了发布、又希望定时全自动,要提醒他:定时无人值守时,发布步要么提前免授权、要么会卡住等确认(见第 4 步的外发边界)。
+
+确认好时间后,按平台生成定时任务:
+- **Claude Code**:用 `/schedule` 创建 routine,在 `SCHEDULE_CRON` 时间跑"一轮跨境选品"。云端定时,关机也能跑。
+- **Codex / OpenCLAW / 通用**:写系统 cron(`crontab -e`)或 macOS launchd plist,定时调启动脚本(`cd $KIT && source scripts/load_config.sh` 后触发链路)。模板见 `references/schedule-templates.md`。
+
+建议用户**先手动成功跑通一轮再开定时**,避免定时半夜卡在某个没配好的环节。
 
 ## 第 6 步:自检(确认全部就位)
 
@@ -84,15 +91,49 @@ description: 引导用户安装部署跨境选品自动化套件。当用户说"
 
 任何一项 ❌ 就停下来帮用户修,全 ✅ 才进第 7 步。
 
-## 第 7 步:引导开始使用
+## 第 7 步:引导开始使用 + 维护说明
 
-告诉用户怎么用:
-- **手动跑一轮**:对 AI 说「跑一轮跨境选品,从 Amazon 开始」。AI 会自动:抓Amazon→归一化→priority品自动进三源验证(污染自检/自动收窄全自动)→六维打分→出INDEX→(若配了)发布。
-- **看结果**:三个入口——(若发布)GitHub 网页 / 工作区里的 `INDEX-<日期>.md` 一页纸 / 逐品下钻看单品报告。
-- **扩展**:以后想加数据源/验证维度/发布通道,分别看 `product-signal-sources` 的接入规范、`product-cross-validation/references/scoring-rubric.md` 的维度扩展规范、仿 publisher 写新通道。
-- **维护**:核心方法论(关键词污染自检/三源口径对齐)已内置进 skill,正常用不用管;升级套件时重跑 install.sh 即可(已存在的 skill 会跳过,需覆盖则先删旧的)。
+**这步要把"怎么用"和"以后怎么维护"都讲清楚,不要只说一句"跑一轮"就结束。** 逐块讲给用户:
 
-最后建议用户**先手动跑一轮**确认链路通,再开定时。
+### A. 手动跑一轮
+对 AI 说「**跑一轮跨境选品,从 Amazon 开始**」。AI 会按 kit 根目录的 `RUNBOOK.md` 顺序执行:
+第1步 Amazon 发现候选品 → priority 品自动进 → 第2步 Ad Library → 第3步 Trends → 第4步 1688 →(污染自检/自动收窄全程自动)→ 第5步 六维打分出看板。
+> 提醒用户:**如果 Amazon 被反爬拦了(503/验证码),AI 会停下来问你**(重试 / 你直接给品 / 推导但标注),不会偷偷编一组假品——这是故意设计的,别误以为是卡住了。
+
+### B. 看结果(报表查看说明)
+所有产出都在 `$WORKSPACE_DIR` 下:
+- **最终看板**:`$WORKSPACE_DIR/最终看板/cross-validation-product-report-<日期>-vN.html` —— 浏览器直接打开,这是带排名和决策的主报告。
+- **单品报告**:`$WORKSPACE_DIR/单品报告/<品类>.report.md` —— 单个品的 Ad Library 详细分析。
+- **原始数据**:`$WORKSPACE_DIR/原始数据/{ad-library,google-trends,1688}/` —— 每步实抓的原始 JSON,想核证据看这里。
+- **(若开了发布)** GitHub 网页:`https://<GITHUB_OWNER>.github.io/<GITHUB_REPO>/`。
+告诉用户具体的 `$WORKSPACE_DIR` 绝对路径(展开后的),方便他直接去翻。
+
+### C. 维护说明
+
+**① 改配置**:所有设置都在 `config/pipeline.config`,改一处全链路生效。常见改动:
+- 换目标市场 → 改 `TARGET_MARKET`。
+- 改定时时间 → 改 `SCHEDULE_CRON`(改完要重建定时任务,见 `references/schedule-templates.md`)。
+
+**② 以后想开 GitHub 发布**(一开始没配的话):
+1. 装并登录 gh CLI:`gh auth login`(选 GitHub.com、HTTPS、按提示授权)。
+2. 在 `pipeline.config` 填 `GITHUB_OWNER`=你的 GitHub 用户名、`GITHUB_REPO`=仓名、`GITHUB_VISIBILITY`=`private` 或 `public`。
+   > ⚠️ `public` = 选品数据公开、会被搜索引擎索引。不确定就 `private`。
+3. 下次跑完链路,让 AI 用 `publish_to_github_pages.py` 发布(**首次发布 AI 会让你确认一次**,因为内容上公网)。
+
+**③ 关掉/改定时**:
+- Claude Code:用 `/schedule` 管理 routine。
+- Codex/OpenCLAW:`crontab -e` 删那行,或卸载 launchd plist(`launchctl unload ...`)。
+
+**④ 扩展链路**:
+- 加数据源(Amazon 外接更多初筛源)→ 看 `product-signal-sources/SKILL.md`。
+- 加验证维度(六维外)→ 看 `product-cross-validation/references/scoring-rubric.md` 的"扩展维度"。
+- 加发布通道(邮件/聊天)→ 仿 `publish_to_github_pages.py` 写新通道。
+
+**⑤ 升级套件**:`git pull` 后重跑 `bash scripts/install.sh`(已存在的 skill 会跳过;要覆盖更新先删 `$SKILLS_DIR` 里旧的同名 skill 再跑)。
+核心方法论(关键词污染自检 / 三源口径对齐 / Amazon 抓不到不编造)已内置进 skill,正常用不用管。
+
+### D. 最后
+强烈建议用户**先手动成功跑通一轮**,确认浏览器登录态、MCP、抓取都通了,再开定时。
 
 ## 重要边界
 

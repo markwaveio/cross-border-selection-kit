@@ -5,9 +5,26 @@ description: Use when building or running a cross-border ecommerce product-selec
 
 # Amazon Trend Signal
 
+> **这是五步跨境选品链路的第 1 步(起点)。** 当用户说「跑一轮跨境选品」「从 Amazon 开始选品」时,从这里开始,然后按 kit 根目录的 `RUNBOOK.md` 顺序把后四步跑完(Ad Library → Trends → 1688 → 交叉打分)。不要直接跳到交叉验证步去倒填候选品。
+
 ## Purpose
 
 Use Amazon as a market signal, not as the whole product decision engine. Prefer extracting product concepts and demand evidence from Amazon, then validate the same concepts on content, ad, search, and supplier platforms.
+
+## ⛔ 铁律:抓不到就停,绝不编造候选品(最重要,先读这条)
+
+Amazon 榜单页经常被反爬拦截(503 / CAPTCHA / WAF / 异常流量页)。**全新环境、全新浏览器 profile 命中反爬的概率更高。** 一旦抓不到真实榜单数据,你**绝对不可以**自己凭空想几个"低风险品"当作候选品继续往下跑——那会让整条链路在一组**捏造的品**上做验证,产出看似完整、实则全假的报告。这是本 skill 最严重的失败模式,必须杜绝。
+
+抓不到时,按以下顺序处理,**永远不要静默 fallback 成自编候选品**:
+
+1. **先停下来**,如实告诉用户:"Amazon 实时榜单抓取被反爬拦截(503/验证码),没有拿到真实候选品。"
+2. **给用户三个明确选项,让用户选**,不要替用户决定:
+   - **(a) 重试抓取**:换更接近真实用户的浏览器会话(已有正常浏览历史的 chrome-devtools MCP 标签页,而不是全新 puppeteer profile),或稍后再试(反爬窗口会过去)。
+   - **(b) 用户直接给候选品/关键词**:用户手里有想验证的品,直接进入第二步起的交叉验证。
+   - **(c) 基于公开信息推导候选品**(Prime Day/季节性/媒体报道方向)——**但必须在产出里把每个这样的品醒目标注 `source: "derived_not_scraped"` 和 `evidence: "推导,非实抓榜单"`**,HTML 看板顶部用红字写明"本轮 Amazon 实时抓取失败,以下候选品为推导而非实抓,需人工复核"。用户必须知情同意才走这条。
+3. **JSON 里 `risk_signal_seen` 必须如实填**抓取失败原因(如 `"amazon_503_blocked"`),不能填 `null` 假装一切正常。
+
+判断标准:报告里任何一个候选品,你都要能说清它是"**实抓的真实榜单条目**"还是"**推导/用户提供**"。说不清来源的品,不许进报告。
 
 ## Workflow
 
@@ -19,7 +36,7 @@ Use Amazon as a market signal, not as the whole product decision engine. Prefer 
 2. Collect low-frequency evidence:
    - Do not batch-open many detail pages.
    - Prefer list pages and saved HTML over repeated navigation.
-   - Stop if CAPTCHA, WAF loops, abnormal traffic pages, login walls, or repeated `202` challenges appear.
+   - Stop if CAPTCHA, WAF loops, abnormal traffic pages, login walls, `503`, or repeated `202` challenges appear — then follow the ⛔ 铁律 above (stop, tell the user, offer retry / user-supplied / clearly-labelled-derived; never silently fabricate).
 3. Extract only trend-useful fields:
    - source, category, rank, product name, ASIN, URL, image URL, captured_at.
    - signal_type: `best_seller`, `mover`, `new_release`, or `homepage_module`.
@@ -54,9 +71,12 @@ Return JSON shaped like this, and render it to HTML when the requested deliverab
   "crawl_mode": "low_frequency_signal_collection",
   "captured_at": "ISO-8601 timestamp",
   "risk_signal_seen": null,
+  "_risk_signal_seen_note": "如实填抓取中遇到的反爬,如 'amazon_503_blocked' / 'captcha'。抓取失败时禁止填 null 假装正常。",
   "items": [
     {
       "signal_type": "best_seller",
+      "candidate_source": "scraped",
+      "_candidate_source_values": "scraped(实抓榜单) | user_supplied(用户提供) | derived_not_scraped(推导,非实抓——抓取失败时唯一允许且必须醒目标注的来源)",
       "category": "Home & Kitchen",
       "rank": 1,
       "asin": "B000000000",

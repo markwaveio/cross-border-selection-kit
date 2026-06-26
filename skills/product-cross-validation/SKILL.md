@@ -5,6 +5,9 @@ description: Use when validating ecommerce or cross-border product ideas after i
 
 # Product Cross Validation
 
+> **这是五步链路的第 5 步(最后一步),不是起点。** 如果用户说的是「跑一轮跨境选品」这种**整轮**请求,**不要从这里开始**——要先回到第 1 步 `amazon-trend-signal` 发现真实候选品,按 kit 根目录 `RUNBOOK.md` 顺序跑。
+> **绝不要因为"还没有候选品"就自己凭空编几个品来跑这一步。** 候选品必须来自 Amazon 实抓 / 用户提供 / 明确标注的推导。无来源的品不许进这一步。
+
 ## Purpose
 
 Validate whether trend-sourced product concepts deserve sampling, supplier outreach, or small-batch testing. Treat this skill as the step after trend discovery, not the trend discovery step itself.
@@ -130,7 +133,25 @@ Return JSON shaped like:
 
 ## HTML Dashboard Requirements
 
-For Chinese "报告", "看板", or "可视化" requests, create a local HTML file under `reports/` unless the user specifies another path. If this run is part of the cross-border product-selection pipeline, put both the HTML and its source JSON into the workspace's dashboard folder (`$WORKSPACE_DIR/最终看板/`, from `pipeline.config`) instead, using a version-suffixed filename (`cross-validation-product-report-<date>-v<N>.html`) and never overwriting a prior version — each version is a checkpoint showing how the ranking changed as new evidence layers were added. Include:
+### 输出位置(必须读 config,不要写进 kit 目录或当前目录)
+
+这是部署后常见的出错点。**报告必须落进用户配置的工作区,而不是 kit 仓库目录、也不是当前工作目录。** 渲染前先确定输出目录:
+
+1. 找到 `pipeline.config`(通常在 kit 根目录的 `config/pipeline.config`),读出 `WORKSPACE_DIR` 的值(展开 `~`)。
+2. 报告输出目录 = `<WORKSPACE_DIR>/最终看板/`。源 JSON 也放这里。
+3. 用 shell 解析后再传给渲染脚本,例如:
+   ```bash
+   source "$KIT_DIR/scripts/load_config.sh"          # 拿到 $WORKSPACE_DIR
+   OUT_DIR="$WORKSPACE_DIR/最终看板"; mkdir -p "$OUT_DIR"
+   python3 "$SKILLS_DIR/product-cross-validation/scripts/render_cross_validation_report.py" \
+     "$OUT_DIR/cross-validation-product-report-<date>-v<N>.json" \
+     -o "$OUT_DIR/cross-validation-product-report-<date>-v<N>.html"
+   ```
+   如果拿不到 config(用户没装 installer 或单独调用本 skill),**先问用户报告存哪**,不要默默存进 kit 目录或 `reports/`。
+
+用版本号后缀文件名(`cross-validation-product-report-<date>-v<N>.html`),**绝不覆盖旧版本** —— 每个版本是一次快照,记录补了新证据后排名怎么变。
+
+报告内容包含:
 
 - Final ranking table.
 - Product validation cards with six scoring dimensions.

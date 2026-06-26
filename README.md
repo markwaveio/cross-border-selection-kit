@@ -88,7 +88,15 @@ bash scripts/install.sh
 
 > **「跑一轮跨境选品,从 Amazon 开始」**
 
-跑完看结果三个入口:GitHub 网页(若配了发布)/ 工作区里的 `INDEX-<日期>.md` 一页纸 / 逐品下钻看单品报告。
+AI 会按 [`RUNBOOK.md`](RUNBOOK.md) 的五步顺序执行(Amazon 发现候选品 → Ad Library → Trends → 1688 → 六维打分)。`RUNBOOK.md` 是给执行链路的 AI 看的逐步手册,任意模型(Claude/Codex/OpenCLAW)都能照着跑。
+
+跑完看结果(都在你配置的工作区 `$WORKSPACE_DIR`):
+- **主报告**:`最终看板/cross-validation-product-report-<日期>-vN.html`(带排名+决策,浏览器打开)
+- **单品报告**:`单品报告/<品类>.report.md`
+- **原始数据**:`原始数据/{ad-library,google-trends,1688}/`
+- (若配了发布)GitHub 网页
+
+> **关于 Amazon 抓取**:Amazon 榜单常被反爬拦(503/验证码),全新环境更容易命中。抓不到时 AI 会**停下来问你**(重试 / 你直接给品 / 推导但标注),**不会偷偷编一组假候选品**——这是故意设计的安全行为。
 
 ---
 
@@ -112,6 +120,7 @@ bash scripts/install.sh
 ```
 cross-border-selection-kit/
 ├── README.md                    ← 你在看的这份
+├── RUNBOOK.md                   ← 链路执行手册(给跑链路的 AI 看的五步顺序)
 ├── config/
 │   └── pipeline.config.example  ← 配置模板(复制成 pipeline.config 填自己的值)
 ├── scripts/
