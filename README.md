@@ -163,7 +163,17 @@ cross-border-selection-kit/
 - **加数据源**(除 Amazon 外接更多初筛源/API):看 `skills/product-signal-sources/SKILL.md` 的接入规范,注册到 `SOURCE_METRIC_MAP`,归一化层会自动合流。
 - **加验证维度**(六维之外加新维度):看 `skills/product-cross-validation/references/scoring-rubric.md` 的"扩展验证维度"小节,报告渲染是维度数量无关的,声明了就会画出来。
 - **加发布通道**(发邮件 / 发聊天):仿 `product-cross-validation/scripts/publish_to_github_pages.py` 写一个新通道。
-- **升级套件**:重跑 `bash scripts/install.sh`,已存在的 skill 会跳过;要覆盖先删旧的。
+
+### 增量更新到最新版
+
+```bash
+cd cross-border-selection-kit   # 进到你当初 clone 的目录
+git pull                        # 1. 拉最新代码
+bash scripts/install.sh --update  # 2. 覆盖更新已装的 skill
+```
+- **必须带 `--update`**:不带参数时 `install.sh` 遇到已存在的 skill 会**跳过、不更新**(防首次安装误覆盖);带 `--update` 才会把已装 skill 覆盖成最新版。
+- 你的 `pipeline.config` 不受影响(`git pull` / `--update` 都不碰它),设置保留。
+- 更新完**重启一次 AI 助手**让新 skill 生效。
 
 ---
 

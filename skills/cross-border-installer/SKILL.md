@@ -129,8 +129,14 @@ description: 引导用户安装部署跨境选品自动化套件。当用户说"
 - 加验证维度(六维外)→ 看 `product-cross-validation/references/scoring-rubric.md` 的"扩展维度"。
 - 加发布通道(邮件/聊天)→ 仿 `publish_to_github_pages.py` 写新通道。
 
-**⑤ 升级套件**:`git pull` 后重跑 `bash scripts/install.sh`(已存在的 skill 会跳过;要覆盖更新先删 `$SKILLS_DIR` 里旧的同名 skill 再跑)。
-核心方法论(关键词污染自检 / 三源口径对齐 / Amazon 抓不到不编造)已内置进 skill,正常用不用管。
+**⑤ 升级套件(增量更新)**:两步——
+```bash
+cd <kit 目录> && git pull        # 1. 拉最新代码
+bash scripts/install.sh --update # 2. 用 --update 覆盖更新已装的 skill 到最新版
+```
+> ⚠️ 一定要带 `--update`。不带参数的 `install.sh` 遇到已存在的 skill **会跳过、不更新**(那是给首次安装防误覆盖用的)。带 `--update` 才会把 `$SKILLS_DIR` 里的旧 skill 覆盖成最新版。
+> `pipeline.config` 是你的本地配置,`git pull` 和 `--update` 都不会动它,设置会保留。更新完**重启一次 AI 助手**让新 skill 生效。
+核心方法论(关键词污染自检 / 三源口径对齐 / Amazon 抓不到不编造 / Trends 限流退避重试 / 1688 拦截换会话登录)已内置进 skill,正常用不用管。
 
 ### D. 最后
 强烈建议用户**先手动成功跑通一轮**,确认浏览器登录态、MCP、抓取都通了,再开定时。

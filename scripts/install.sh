@@ -11,11 +11,30 @@
 #   6. 打印下一步
 #
 # 它【不会】偷偷安装任何东西或改你已有的 skill。缺依赖时只告诉你怎么补。
-# 用法:  bash scripts/install.sh
+#
+# 用法:
+#   bash scripts/install.sh            首次安装(已存在的 skill 会跳过,不覆盖)
+#   bash scripts/install.sh --update   增量更新(覆盖更新已存在的 skill 到最新版)
+#                                      —— 配合 git pull 用:先 git pull 拉最新代码,
+#                                         再 bash scripts/install.sh --update
 # ============================================================
 set -uo pipefail
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$KIT_DIR"
+
+# 解析参数:--update / -u 表示覆盖更新已存在的 skill
+UPDATE_MODE=0
+for arg in "$@"; do
+  case "$arg" in
+    --update|-u) UPDATE_MODE=1 ;;
+    -h|--help)
+      echo "用法: bash scripts/install.sh [--update]"
+      echo "  (无参数)  首次安装,已存在的 skill 跳过不覆盖"
+      echo "  --update  增量更新,覆盖已存在的 skill 到最新版(先 git pull 再跑本命令)"
+      exit 0 ;;
+    *) echo "未知参数: $arg(可用: --update / --help)"; exit 1 ;;
+  esac
+done
 
 c_ok(){ printf "  ✅ %s\n" "$1"; }
 c_no(){ printf "  ❌ %s\n" "$1"; }
@@ -60,20 +79,30 @@ c_ok "配置已加载:SKILLS_DIR=$SKILLS_DIR"
 c_ok "工作区:WORKSPACE_DIR=$WORKSPACE_DIR"
 
 hr
-echo "【3/5】安装核心 skill 到 $SKILLS_DIR"
+if [ "$UPDATE_MODE" -eq 1 ]; then
+  echo "【3/5】更新核心 skill 到 $SKILLS_DIR(--update:覆盖已存在的)"
+else
+  echo "【3/5】安装核心 skill 到 $SKILLS_DIR(已存在的跳过;要更新加 --update)"
+fi
 mkdir -p "$SKILLS_DIR"
-INSTALLED=0
+INSTALLED=0; UPDATED=0; SKIPPED=0
 for s in product-signal-sources amazon-trend-signal ad-library-product-validator \
          google-trends-product-validator 1688-supplier-validator product-cross-validation; do
   src="$KIT_DIR/skills/$s"
   dst="$SKILLS_DIR/$s"
+  if [ ! -d "$src" ]; then c_no "$s 源缺失($src)—— 仓库可能不完整,先 git pull"; continue; fi
   if [ -d "$dst" ]; then
-    c_warn "$s 已存在 —— 跳过(如需覆盖先手动删除 $dst)"
+    if [ "$UPDATE_MODE" -eq 1 ]; then
+      # 先删旧目录再整体拷贝,确保上游删掉的文件不会残留
+      rm -rf "$dst" && cp -R "$src" "$dst" && { c_ok "$s 已更新"; UPDATED=$((UPDATED+1)); }
+    else
+      c_warn "$s 已存在 —— 跳过(要更新到最新版:bash scripts/install.sh --update)"; SKIPPED=$((SKIPPED+1))
+    fi
   else
     cp -R "$src" "$dst" && { c_ok "$s 已安装"; INSTALLED=$((INSTALLED+1)); }
   fi
 done
-echo "     新装 $INSTALLED 个 skill。"
+echo "     新装 $INSTALLED · 更新 $UPDATED · 跳过 $SKIPPED。"
 
 hr
 echo "【4/5】创建工作区目录"
@@ -97,6 +126,8 @@ fi
 hr
 if [ "$MISSING" -eq 1 ]; then
   echo "⚠️  有必需依赖缺失(见上方 ❌)。补齐后重跑 bash scripts/install.sh"
+elif [ "$UPDATE_MODE" -eq 1 ]; then
+  echo "✅ 更新完成!(更新 $UPDATED 个 skill)重启 AI 助手让新版生效。"
 else
   echo "✅ 安装完成!"
 fi
@@ -105,3 +136,4 @@ echo "下一步:"
 echo "  • 在你的 AI 助手里说「跑一轮跨境选品,从 Amazon 开始」"
 echo "  • 或运行 installer 引导 skill 配置定时自动运行"
 echo "  • 产出会存到 $WORKSPACE_DIR,看板在 最终看板/ 子目录"
+echo "  • 以后升级套件:git pull 后跑 bash scripts/install.sh --update"
