@@ -11,7 +11,7 @@ Use this skill to turn a Chinese product keyword into a 1688 supply-chain snapsh
 
 > ⛔ **被验证码/风控拦截时,绝不能直接判失败放弃这一步。** 这是部署后最常见的退缩。`offer_search.htm` 搜索页**本身不需要登录**,但全新自动化浏览器 profile 容易触发风控验证码——遇到时**必须按下面的升级阶梯兜底**,一直到拿到数据或穷尽手段为止:
 >
-> 1. **换会话**:不要在全新 puppeteer profile 上反复重试。改用 **chrome-devtools MCP 的浏览器标签页**(已有正常浏览历史、被信任),`navigate_page` 到 GBK 编码的搜索 URL,再 `evaluate_script` 提取页面文本/offer 卡片。这条通常就能绕过。
+> 1. **换会话**:不要在全新 puppeteer profile 上反复重试。改用 **chrome-devtools MCP 的浏览器**(它用自己的持久 profile,接管不了你日常 Chrome——别试图接管),`navigate_page` 到 GBK 编码的搜索 URL,再 `evaluate_script` 提取页面文本/offer 卡片。MCP 这个 profile 是持久的,**在它里面登录过一次 1688/淘宝后就变成被信任会话**(见下一档),之后抓取通常就能绕过验证码。
 > 2. **若换会话后仍被拦/仍要求登录**:**主动停下来引导用户在这个浏览器里登录一次**——明确告诉用户:"1688 当前被验证码拦截,请在弹出的浏览器窗口扫码登录你的 1688/淘宝账号,登录后我继续抓取。" 用户扫码登录后,该会话变为可信,重试抓取。**这一步要主动引导,不要因为'搜索页理论上不需要登录'就跳过引导、直接判失败。**
 > 3. **唯有上述都试过仍拿不到**(比如用户无账号、或登录后仍被风控),才停下如实告诉用户,并把该品的供应链维度标 `manual_confirmation_needed` + 附 1688 搜索直达链接(而不是悄悄当无数据)。
 >

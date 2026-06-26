@@ -11,17 +11,28 @@ description: Use when building or running a cross-border ecommerce product-selec
 
 Use Amazon as a market signal, not as the whole product decision engine. Prefer extracting product concepts and demand evidence from Amazon, then validate the same concepts on content, ad, search, and supplier platforms.
 
-## ⛔ 铁律:抓不到就停,绝不编造候选品(最重要,先读这条)
+## 🅰️ 先把抓取做对:用持久 profile + 登录态,别裸抓(先读这条,能避开大多数 503)
 
-Amazon 榜单页经常被反爬拦截(503 / CAPTCHA / WAF / 异常流量页)。**全新环境、全新浏览器 profile 命中反爬的概率更高。** 一旦抓不到真实榜单数据,你**绝对不可以**自己凭空想几个"低风险品"当作候选品继续往下跑——那会让整条链路在一组**捏造的品**上做验证,产出看似完整、实则全假的报告。这是本 skill 最严重的失败模式,必须杜绝。
+Amazon 对"无痕/全新/无登录态"的自动化会话特别容易回 503/验证码。**降低 503 的正确办法不是反复重试,是用一个"看起来像正常用户"的浏览器会话去抓。** 具体:
+
+- **chrome-devtools MCP 用的是它自己的持久 profile**(固定路径 `~/.cache/chrome-devtools-mcp/chrome-profile`),**不是、也接管不了你日常用的那个 Chrome**。所以不要试图"接管已有浏览历史的浏览器/标签页"——那条路在 Chrome 现行安全模型下走不通,只会卡在"profile 被占用/无法接管"。
+- **正确做法**:第一次抓 Amazon 前,在 **MCP 这个持久 profile 的浏览器窗口里手动登录一次 Amazon 账号**(用 `new_page` 打开 amazon.com,让用户在该窗口登录)。这个 profile 是持久化的,**登录一次以后一直保留**,之后每次抓都是"已登录的正常用户",503 概率大幅下降。
+- **遇到"profile 已被占用/无法连接"**:多半是上一个 MCP 浏览器实例或标签还开着。先 `list_pages` 看现有标签、复用已开的页(或关掉占用的实例重连),**不要新起一个全新无痕会话去裸抓**。
+- 抓取保持低频:用列表页、别狂开详情页(见下方 Workflow / Tool Guidance)。
+
+**只有在"已登录持久 profile + 低频"仍然被 503/验证码挡住时**,才进入下面的 ⛔ 铁律(停下来问用户)。不要一遇到 503 就直接跳到问用户——先按上面把会话做对、重试一两次。
+
+## ⛔ 铁律:抓不到就停,绝不编造候选品(最重要)
+
+一旦用对了会话仍抓不到真实榜单数据,你**绝对不可以**自己凭空想几个"低风险品"当作候选品继续往下跑——那会让整条链路在一组**捏造的品**上做验证,产出看似完整、实则全假的报告。这是本 skill 最严重的失败模式,必须杜绝。
 
 抓不到时,按以下顺序处理,**永远不要静默 fallback 成自编候选品**:
 
-1. **先停下来**,如实告诉用户:"Amazon 实时榜单抓取被反爬拦截(503/验证码),没有拿到真实候选品。"
+1. **先停下来**,如实告诉用户:"Amazon 实时榜单抓取被反爬拦截(503/验证码),已尝试用登录态会话仍未拿到真实候选品。"
 2. **给用户三个明确选项,让用户选**,不要替用户决定:
-   - **(a) 重试抓取**:换更接近真实用户的浏览器会话(已有正常浏览历史的 chrome-devtools MCP 标签页,而不是全新 puppeteer profile),或稍后再试(反爬窗口会过去)。
+   - **(a) 重试抓取**:确认已在 MCP 持久 profile 里登录 Amazon(没登录就先引导登录一次),或稍后再试(反爬窗口会过去)。**不要再建议"接管已有浏览器会话"——做不到。**
    - **(b) 用户直接给候选品/关键词**:用户手里有想验证的品,直接进入第二步起的交叉验证。
-   - **(c) 基于公开信息推导候选品**(Prime Day/季节性/媒体报道方向)——**但必须在产出里把每个这样的品醒目标注 `source: "derived_not_scraped"` 和 `evidence: "推导,非实抓榜单"`**,HTML 看板顶部用红字写明"本轮 Amazon 实时抓取失败,以下候选品为推导而非实抓,需人工复核"。用户必须知情同意才走这条。
+   - **(c) 基于公开信息推导候选品**(Prime Day/季节性/媒体报道方向)——**但必须在产出里把每个这样的品醒目标注 `candidate_source: "derived_not_scraped"`**,HTML 看板顶部用红字写明"本轮 Amazon 实时抓取失败,以下候选品为推导而非实抓,需人工复核"。用户必须知情同意才走这条。
 3. **JSON 里 `risk_signal_seen` 必须如实填**抓取失败原因(如 `"amazon_503_blocked"`),不能填 `null` 假装一切正常。
 
 判断标准:报告里任何一个候选品,你都要能说清它是"**实抓的真实榜单条目**"还是"**推导/用户提供**"。说不清来源的品,不许进报告。
@@ -55,7 +66,7 @@ Amazon 榜单页经常被反爬拦截(503 / CAPTCHA / WAF / 异常流量页)。*
 
 ## Tool Guidance
 
-- If Chrome DevTools MCP is available, use it to capture page HTML, network requests, screenshots, and WAF/bot signals.
+- If Chrome DevTools MCP is available, use it to capture page HTML, network requests, screenshots, and WAF/bot signals. **它用自己的持久 profile(`~/.cache/chrome-devtools-mcp/chrome-profile`),不是你的日常 Chrome。第一次抓 Amazon 前先在这个 profile 窗口登录一次 Amazon(持久化),用登录态会话抓能显著降低 503——详见顶部 🅰️ 节。遇 "profile 被占用" 先 `list_pages` 复用已开页,别新起无痕会话裸抓。**
 - If only Playwright MCP is available, use `browser_navigate`, `browser_network_requests`, and saved response bodies.
 - Use `scripts/parse_amazon_homepage.py` on a saved homepage HTML file to extract module headings, image alt product names, and carousel ASIN/title/url rows.
 - Use `scripts/render_visual_report.py report.json -o report.html` to turn the JSON report into a standalone visual dashboard.
