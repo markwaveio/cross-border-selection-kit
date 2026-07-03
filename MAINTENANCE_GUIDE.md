@@ -1,13 +1,65 @@
-# cross-border-selection-kit 手动修改说明
+# cross-border-selection-kit 手动修改维护说明
 
-这份文档用于后续维护选品系统时快速定位：归一化器在哪里改、新验证标准在哪里加、执行链路怎么同步更新。
+这份文档用于后续维护选品系统时快速定位：数据入口在哪里加、归一化器在哪里改、新验证标准在哪里接入、发布通道怎么扩展。
+
+## 0. 先理解模块边界
+
+这套系统的维护边界分成四层：
+
+```text
+数据源适配器
+  ├─ Amazon 榜单
+  ├─ TikTok 热门
+  ├─ 卖家精灵 API
+  ├─ 独立站爆款
+  └─ 任意新源
+        │
+        ▼
+product-signal-sources
+归一化器：合并、去重、去品牌、过滤、打优先级
+        │
+        ▼
+Ad Library / Google Trends / 1688 / 其它验证器
+        │
+        ▼
+product-cross-validation
+打分、决策、生成报告
+        │
+        ▼
+发布通道：GitHub Pages / 邮件 / 飞书 / 群消息
+```
+
+维护原则：
+
+```text
+加数据源：只动 product-signal-sources
+改评分标准：只动 product-cross-validation/references/scoring-rubric.md
+加验证步骤：新增 validator，并同步 RUNBOOK.md
+加发布通道：仿 publish_to_github_pages.py 新增脚本
+不要为了加源或加维度去改报告渲染脚本
+```
 
 ## 1. 新增数据源
+
+对应模块：
+
+```text
+skills/product-signal-sources/
+```
 
 归一化器位置：
 
 ```text
 skills/product-signal-sources/scripts/normalize_signals.py
+```
+
+为什么能随便加源：
+
+```text
+每个数据源都是一个独立适配器。
+适配器负责把各自的数据吐成同一种候选品 schema。
+归一化器只吃这种统一 schema。
+下游验证完全不知道、也不关心数据来自几个源。
 ```
 
 新增数据源时，按这个顺序改：
@@ -86,6 +138,20 @@ python3 skills/product-signal-sources/scripts/normalize_signals.py \
   --top 8
 ```
 
+现成样板：
+
+```text
+skills/product-signal-sources/references/source-amazon.md
+```
+
+推荐优先接入：
+
+```text
+TikTok 热门视频/商品：注意登录态，不登录常返回空
+卖家精灵 API：直接输出搜索量、竞品数，结构化程度最高
+独立站爆款 / CJ / Doba：适合做非 Amazon 初筛源
+```
+
 ## 2. 修改硬过滤规则
 
 位置：
@@ -133,7 +199,64 @@ Differentiation space  10
 
 如果只调整权重，直接改表格即可。建议总分仍保持 100。
 
-## 4. 新增验证维度
+常见调整方向：
+
+```text
+转化导向：提高 Demand strength 和 Ads validation
+内容种草导向：提高 Content spread
+供应链导向：提高 Supplier structure
+高复购耗材：新增 Repurchase / Profit 维度
+稳健型打样：提高 Logistics/compliance 权重
+```
+
+示例：加入利润维度后重新分配 100 分：
+
+```text
+Demand strength        20
+Ads validation         15
+Content spread         10
+Supplier structure     15
+Logistics/compliance   10
+Differentiation space  10
+Profit estimate        20
+```
+
+## 4. 修改决策门槛
+
+位置：
+
+```text
+skills/product-cross-validation/references/scoring-rubric.md
+```
+
+默认门槛：
+
+```text
+80+    sample_now：立即打样
+70-79  validate_more：继续验证
+60-69  watch：观察
+<60    avoid：放弃
+特殊   convert_to_accessory：主品被品牌/生态/风险锁死，转做配件
+```
+
+如果你想更严格，可以改成：
+
+```text
+85+    sample_now
+75-84  validate_more
+65-74  watch
+<65    avoid
+```
+
+改门槛适合这些情况：
+
+```text
+库存风险高：提高 sample_now 门槛
+现金流紧：提高 sample_now 和 validate_more 门槛
+快速测品：降低 sample_now 门槛，但必须保留合规/IP硬伤一票否决
+```
+
+## 5. 新增验证维度
 
 入口：
 
@@ -193,7 +316,46 @@ skills/profit-estimate-validator/
 
 说明：`skills/product-cross-validation/scripts/render_cross_validation_report.py` 不需要改。它会根据 report JSON 的 `dimensions` 自动渲染新维度。
 
-## 5. 修改执行链路
+如果 report JSON 不声明 `dimensions`，渲染器会自动回退到默认六维，向后兼容。
+
+## 6. 维护口径对齐规则
+
+位置：
+
+```text
+skills/product-cross-validation/references/scoring-rubric.md
+skills/product-cross-validation/SKILL.md
+RUNBOOK.md
+```
+
+核心规则：
+
+```text
+打分前，必须确认 Ad Library / Google Trends / 1688 用的是同一个产品形态关键词。
+英文和中文翻译可以不同，但产品形态必须一致。
+```
+
+如果没有对齐：
+
+```text
+1. 受影响维度最高只能给 60% 分数
+2. evidence 里写清楚哪个源用了哪个关键词
+3. 标记 manual_confirmation_needed
+4. 不能让未对齐品靠虚高数据排到已对齐品前面
+```
+
+示例：
+
+```text
+Ad Library：olive oil mister
+Google Trends：oil sprayer
+1688：厨房喷油壶
+
+问题：Google Trends 仍是宽泛词，可能混入 paint sprayer / pesticide sprayer。
+处理：需求维度封顶，标 manual_confirmation_needed。
+```
+
+## 7. 修改执行链路
 
 位置：
 
@@ -216,7 +378,7 @@ RUNBOOK.md
 
 然后在第 5 步说明：`product-cross-validation` 需要读取新 validator 的结果，并写入 report JSON 的 `scores` 和 `evidence`。
 
-## 6. 修改关键词污染规则
+## 8. 修改关键词污染规则
 
 位置：
 
@@ -234,7 +396,47 @@ skills/product-cross-validation/references/keyword-pollution-blacklist.md
 
 Ad Library 和 Google Trends validator 会参考这个黑名单做自动收窄。
 
-## 7. 修改配置项
+## 9. 扩展发布通道
+
+默认发布脚本：
+
+```text
+skills/product-cross-validation/scripts/publish_to_github_pages.py
+```
+
+如果要新增发布通道，例如邮件、飞书、Telegram、企业微信群：
+
+1. 新建发布脚本：
+
+```text
+skills/product-cross-validation/scripts/publish_to_<channel>.py
+```
+
+2. 输入同一份最终报告：
+
+```text
+$WORKSPACE_DIR/最终看板/cross-validation-product-report-<date>-v<N>.html
+$WORKSPACE_DIR/最终看板/cross-validation-product-report-<date>-v<N>.json
+```
+
+3. 只处理“送达方式”，不要改选品链路。
+
+示例：
+
+```text
+publish_to_email.py：读取 HTML，发送到指定邮箱
+publish_to_feishu.py：读取摘要，发送到飞书群或文档
+publish_to_telegram.py：发送报告链接和前三名品
+```
+
+原则：
+
+```text
+报告怎么生成，和报告发到哪里，是两件事。
+新增发布通道不要影响数据源、验证器、打分规则。
+```
+
+## 10. 修改配置项
 
 配置模板位置：
 
@@ -256,7 +458,40 @@ scripts/load_config.sh
 scripts/pipeline_config.py
 ```
 
-## 8. 更新已安装 skill
+## 11. 维护纪律
+
+每次修改都建议记录：
+
+```text
+改了什么：数据源 / 权重 / 门槛 / 新维度 / 发布通道
+为什么改：业务目标或历史误判原因
+影响什么：候选品排序、打样门槛、报告展示、发布方式
+是否需要重新跑历史样本：是 / 否
+```
+
+建议新增维护日志：
+
+```text
+CHANGELOG.md
+```
+
+不同客户或不同品类，不要直接共用一套评分规则。可以复制规则文件：
+
+```text
+skills/product-cross-validation/references/scoring-rubric-client-a.md
+skills/product-cross-validation/references/scoring-rubric-beauty.md
+skills/product-cross-validation/references/scoring-rubric-consumables.md
+```
+
+三条硬纪律：
+
+```text
+1. 加数据源，优先只动 product-signal-sources
+2. 改验证标准，优先只动 scoring-rubric.md 和 report JSON
+3. 加源、加维度、加发布通道时，通常不需要改渲染脚本
+```
+
+## 12. 更新已安装 skill
 
 改完仓库后执行：
 
@@ -269,7 +504,7 @@ bash scripts/install.sh --update
 
 注意：不带 `--update` 时，已存在的 skill 会跳过，不会覆盖更新。
 
-## 9. 推荐修改顺序
+## 13. 推荐修改顺序
 
 ```text
 1. 先改 source adapter 或 validator
@@ -280,7 +515,7 @@ bash scripts/install.sh --update
 6. 重启 AI 助手
 ```
 
-## 10. 最小测试命令
+## 14. 最小测试命令
 
 测试归一化：
 
